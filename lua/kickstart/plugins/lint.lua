@@ -7,8 +7,22 @@ return {
       local lint = require 'lint'
       lint.linters_by_ft = {
         markdown = { 'markdownlint' },
+        java = { 'checkstyle' },
       }
-
+      require('lint.linters.checkstyle').config_file = vim.fn.getcwd() .. '/config/checkstyle/checkstyle.xml'
+      -- Use Gradle to run Checkstyle
+      -- lint.linters.checkstyle = {
+      --   name = 'gradle checkstyle',
+      --   cmd = 'gradle', -- Use the Gradle for consistency
+      --   args = {
+      --     '--quiet', -- Reduce verbosity
+      --     'check', -- Run the Gradle check task
+      --   },
+      --   stdin = false, -- Gradle doesn't use stdin for input
+      --   cwd = vim.fn.getcwd(), -- Set the working directory to the current project
+      --   ignore_exitcode = true, -- Ignore non-zero exit codes (warnings shouldn't fail the linter)
+      --   parser = require('lint.parser').from_errorformat('%f:%l:%c: %m', {}),
+      -- }
       -- To allow other plugins to add linters to require('lint').linters_by_ft,
       -- instead set linters_by_ft like this:
       -- lint.linters_by_ft = lint.linters_by_ft or {}
@@ -47,6 +61,7 @@ return {
       vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWritePost', 'InsertLeave' }, {
         group = lint_augroup,
         callback = function()
+          -- print 'Linting triggered' -- Debug message
           -- Only run the linter in buffers that you can modify in order to
           -- avoid superfluous noise, notably within the handy LSP pop-ups that
           -- describe the hovered symbol using Markdown.

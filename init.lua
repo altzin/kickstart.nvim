@@ -114,9 +114,9 @@ vim.opt.showmode = false
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
 --  Remove this option if you want your OS clipboard to remain independent.
 --  See `:help 'clipboard'`
-vim.schedule(function()
-  vim.opt.clipboard = 'unnamedplus'
-end)
+-- vim.schedule(function()
+--   vim.opt.clipboard = 'unnamedplus'
+-- end)
 
 -- Enable break indent
 vim.opt.breakindent = true
@@ -163,12 +163,27 @@ vim.opt.scrolloff = 20
 -- MY OWN ADDITION
 vim.keymap.set('n', '<C-p>', '<C-^>')
 
+vim.keymap.set('n', '<leader>th', function()
+  -- Check if inlay hints are enabled for the current buffer
+  local is_enabled = vim.lsp.inlay_hint.is_enabled { bufnr = 0 }
+  -- Toggle the state
+  vim.lsp.inlay_hint.enable(not is_enabled, { bufnr = 0 })
+end, { desc = '[T]oggle Inlay [H]ints' })
+
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
-vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+vim.keymap.set('n', '<leader>q', function()
+  vim.diagnostic.setloclist()
+  vim.cmd 'lopen'
+end, { desc = 'Open diagnostic [q]uickfix list' })
+vim.keymap.set('n', '<leader>Q', vim.diagnostic.setqflist, { desc = 'Project diagnostics to [Q]uickfix' })
+
+vim.keymap.set('n', '<leader>e', function()
+  vim.diagnostic.open_float { focus = true }
+end, { desc = 'Show and focus diagnostic [E]rror messages' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -177,6 +192,21 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
+
+-- NEW FILE file create file new add file
+vim.keymap.set('n', '<leader>n', function()
+  local current_dir = vim.fn.expand '%:p:h'
+  if current_dir == '' then
+    current_dir = vim.fn.getcwd()
+  end
+
+  vim.ui.input({ prompt = 'New file: ', default = current_dir .. '/' }, function(input)
+    if input and input ~= '' then
+      vim.fn.mkdir(vim.fn.fnamemodify(input, ':h'), 'p')
+      vim.cmd('edit ' .. vim.fn.fnameescape(input))
+    end
+  end)
+end, { desc = 'Create new file relative to current buffer' })
 
 -- TIP: Disable arrow keys in normal mode
 -- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
@@ -197,8 +227,10 @@ vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper win
 --  See `:help lua-guide-autocommands`
 vim.diagnostic.config {
   virtual_text = {
-    severity = { min = vim.diagnostic.severity.WARN }, -- Only show warnings and errors
+    severity = { min = vim.diagnostic.severity.WARN }, -- Only show warnings and errors}
   },
+  signs = true,
+  underline = true,
   float = {
     severity_sort = true, -- Sort by severity in floating windows
   },
@@ -218,7 +250,7 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
-if not (vim.uv or vim.loop).fs_stat(lazypath) then
+if not vim.uv.fs_stat(lazypath) then
   local lazyrepo = 'https://github.com/folke/lazy.nvim.git'
   local out = vim.fn.system { 'git', 'clone', '--filter=blob:none', '--branch=stable', lazyrepo, lazypath }
   if vim.v.shell_error ~= 0 then
@@ -346,7 +378,7 @@ require('lazy').setup({
   { -- Fuzzy Finder (files, lsp, etc)
     'nvim-telescope/telescope.nvim',
     event = 'VimEnter',
-    branch = '0.1.x',
+    branch = 'master',
     dependencies = {
       'nvim-lua/plenary.nvim',
       { -- If encountering errors, see telescope-fzf-native README for installation instructions
@@ -373,7 +405,15 @@ require('lazy').setup({
         },
 
         config = function()
-          require('nvim-tree').setup {}
+          require('nvim-tree').setup {
+            filters = {
+              dotfiles = true, -- show .env and .gitignore
+              git_ignored = true, -- hide ignored folders such as target
+            },
+            git = {
+              ignore = true,
+            },
+          }
         end,
       },
 
@@ -430,6 +470,23 @@ require('lazy').setup({
           colorscheme = {
             enable_preview = true,
           },
+          find_files = {
+            hidden = true,
+            dotfiles = false,
+            -- no_ignore = false, -- shows files ignored by .gitignore too
+          },
+          -- git = {
+          --   ignore = false,
+          -- },
+
+          live_grep = {
+            additional_args = function()
+              return {
+                '--hidden',
+                -- '--no-ignore',
+              }
+            end,
+          },
         },
         extensions = {
           ['ui-select'] = {
@@ -451,7 +508,10 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>st', builtin.builtin, { desc = '[S]earch [T]elescope' })
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
-      vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch all [d]iagnostics' })
+      vim.keymap.set('n', '<leader>sd', function()
+        builtin.diagnostics { bufnr = nil }
+      end, { desc = '[S]earch all [d]iagnostics' })
+      -- vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics { bufnr = nil }, { desc = '[S]earch all [d]iagnostics' })
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
@@ -481,8 +541,10 @@ require('lazy').setup({
       end, { desc = '[S]earch [N]eovim files' })
 
       vim.keymap.set('n', '<leader>sc', function()
-        builtin.diagnostics {
-          severity_limit = vim.diagnostic.severity.WARN,
+        require('builtin.diagnostics').diagnostics {
+          -- builtin.diagnostics {
+          --   severity_limit = vim.diagnostic.severity.WARN,
+          bufnr = nil,
         }
       end, { desc = '[S]earch [C]ritical Diagnostics' })
     end,
@@ -544,19 +606,29 @@ require('lazy').setup({
       -- If you're wondering about lsp vs treesitter, you can check out the wonderfully
       -- and elegantly composed help section, `:help lsp-vs-treesitter`
 
+      -- old kickback conf
+      -- client.handlers['textDocument/publishDiagnostics'] = vim.lsp.diagnostic.on_publish_diagnostics {
+      --   -- Hide diagnostics of "info" level for jdtls
+      --   severity = { min = vim.diagnostic.severity.WARN },
+      -- }
+      -- end conf.
       -- test display only warnigns
-      vim.api.nvim_create_autocmd('LspAttach', {
-        pattern = '*.java',
-        callback = function(args)
-          local client = vim.lsp.get_client_by_id(args.data.client_id)
-          if client.name == 'jdtls' then
-            client.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
-              -- Hide diagnostics of "info" level for jdtls
-              severity = { min = vim.diagnostic.severity.WARN },
-            })
-          end
-        end,
-      })
+      -- vim.api.nvim_create_autocmd('LspAttach', {
+      --   pattern = '*.java',
+      --   callback = function(args)
+      --     local client = vim.lsp.get_client_by_id(args.data.client_id)
+      --     if client and client.name == 'jdtls' then
+      --       client.handlers['textDocument/publishDiagnostics'] = function(err, result, ctx, config)
+      --         -- Ensure config exists, then merge your custom settings
+      --         config = config or {}
+      --         config.severity = { min = vim.diagnostic.severity.WARN }
+      --
+      --         -- Pass all 4 arguments to the default handler
+      --         vim.lsp.diagnostic.on_publish_diagnostics(err, result, ctx, config)
+      --       end
+      --     end
+      --   end,
+      -- })
 
       --  This function gets run when an LSP attaches to a particular buffer.
       --    That is to say, every time a new file is opened that is associated with
@@ -574,6 +646,20 @@ require('lazy').setup({
             mode = mode or 'n'
             vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
           end
+
+          vim.api.nvim_create_autocmd('LspAttach', {
+            group = vim.api.nvim_create_augroup('kickstart-lsp-attach', { clear = true }),
+            callback = function(event)
+              local client = vim.lsp.get_client_by_id(event.data.client_id)
+
+              -- Enable inlay hints if the language server supports it
+              if client and client:supports_method 'textDocument/inlayHint' then
+                vim.lsp.inlay_hint.enable(true, { bufnr = event.buf })
+              end
+
+              -- ... your existing keymaps ...
+            end,
+          })
 
           -- Jump to the definition of the word under your cursor.
           --  This is where a variable was first declared, or where a function is defined, etc.
@@ -618,7 +704,7 @@ require('lazy').setup({
           --
           -- When you move your cursor, the highlights will be cleared (the second autocommand).
           local client = vim.lsp.get_client_by_id(event.data.client_id)
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
+          if client and client:supports_method 'textDocument/documentHighlight' then
             local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
             vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
               buffer = event.buf,
@@ -640,27 +726,29 @@ require('lazy').setup({
               end,
             })
           end
-
-          -- The following code creates a keymap to toggle inlay hints in your
-          -- code, if the language server you are using supports them
-          --
-          -- This may be unwanted, since they displace some of your code
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
-            map('<leader>th', function()
-              vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
-            end, '[T]oggle Inlay [H]ints')
-          end
         end,
       })
 
       -- Change diagnostic symbols in the sign column (gutter)
       if vim.g.have_nerd_font then
-        local signs = { Error = '', Warn = '', Hint = '', Info = '' }
-        for type, icon in pairs(signs) do
-          local hl = 'DiagnosticSign' .. type
-          vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
-        end
+        vim.diagnostic.config {
+          signs = {
+            text = {
+              [vim.diagnostic.severity.ERROR] = '',
+              [vim.diagnostic.severity.WARN] = '',
+              [vim.diagnostic.severity.HINT] = '',
+              [vim.diagnostic.severity.INFO] = '',
+            },
+          },
+        }
       end
+      -- if vim.g.have_nerd_font then
+      --   local signs = { Error = '', Warn = '', Hint = '', Info = '' }
+      --   for type, icon in pairs(signs) do
+      --     local hl = 'DiagnosticSign' .. type
+      --     vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
+      --   end
+      -- end
 
       -- LSP servers and clients are able to communicate to each other what features they support.
       --  By default, Neovim doesn't support everything that is in the LSP specification.
@@ -680,8 +768,28 @@ require('lazy').setup({
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
         -- clangd = {},
-        -- gopls = {},
+        gopls = {
+          settings = {
+            gopls = {
+              completeUnimported = true,
+              usePlaceholders = true,
+              analyses = {
+                unusedparams = true,
+              },
+            },
+          },
+        },
         -- pyright = {},
+        hls = {
+          settings = {
+            haskell = {
+              formattingProvider = 'none',
+            },
+          },
+          on_attach = function(client, bufnr)
+            client.server_capabilities.semanticTokensProvider = vim.NIL
+          end,
+        },
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -723,6 +831,7 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'ormolu',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -775,6 +884,8 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
+        haskell = { 'ormolu' },
+        go = { 'goimports', 'gofmt' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
@@ -851,7 +962,7 @@ require('lazy').setup({
           -- Accept ([y]es) the completion.
           --  This will auto-import if your LSP supports it.
           --  This will expand snippets if the LSP sent a snippet.
-          ['<C-y>'] = cmp.mapping.confirm { select = true },
+          ['<C-CR>'] = cmp.mapping.confirm { select = true },
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
@@ -971,13 +1082,14 @@ require('lazy').setup({
     -- Uncomment next line if you want to follow only stable versions
     version = '*',
   },
+  -- OLD CONF BELOW, AI ABOVE
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
+    main = 'nvim-treesitter.config', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
     opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
+      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc', 'haskell' },
       -- Autoinstall languages that are not installed
       auto_install = true,
       highlight = {
@@ -1008,8 +1120,8 @@ require('lazy').setup({
   --
   -- require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
-  require 'kickstart.plugins.lint',
-  require 'kickstart.plugins.autopairs',
+  -- require 'kickstart.plugins.lint',
+  -- require 'kickstart.plugins.autopairs',
   -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
@@ -1017,7 +1129,7 @@ require('lazy').setup({
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
@@ -1047,3 +1159,4 @@ require('lazy').setup({
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+--

@@ -87,9 +87,12 @@ P.S. You can delete this when you're done too. It's your config now! :)
 -- Set <space> as the leader key
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
+--
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
 
@@ -406,7 +409,6 @@ require('lazy').setup({
         end,
       },
       { 'nvim-telescope/telescope-ui-select.nvim' },
-
       {
         'nvim-tree/nvim-tree.lua',
         version = '*',
@@ -417,13 +419,20 @@ require('lazy').setup({
 
         config = function()
           require('nvim-tree').setup {
+            renderer = {
+              root_folder_label = ':t',
+              symlink_destination = false,
+            },
             filters = {
-              dotfiles = true, -- show .env and .gitignore
-              git_ignored = true, -- hide ignored folders such as target
+              dotfiles = true, -- Hide all dotfiles by default (.git/, etc.)
+              git_ignored = true, -- Hide folders like target/ or node_modules/
+              exclude = { '.env', '.gitignore' }, -- Use exact strings instead of regex
             },
-            git = {
-              ignore = true,
-            },
+            -- filters = {
+            --   dotfiles = false, -- false means DO NOT filter out dotfiles
+            --   git_ignored = true,
+            --   exclude = { '^\\.env' }, -- Force render .env files even if git-ignored
+            -- },
           }
         end,
       },
@@ -484,6 +493,7 @@ require('lazy').setup({
           find_files = {
             hidden = true,
             dotfiles = false,
+            follow = true,
             -- no_ignore = false, -- shows files ignored by .gitignore too
           },
           -- git = {
@@ -791,17 +801,16 @@ require('lazy').setup({
           },
         },
         -- pyright = {},
-        hls = {
-          settings = {
-            haskell = {
-              formattingProvider = 'none',
-            },
-          },
-          on_attach = function(client, bufnr)
-            client.server_capabilities.semanticTokensProvider = vim.NIL
-          end,
-        },
-        -- rust_analyzer = {},
+        -- hls = {
+        --   settings = {
+        --     haskell = {
+        --       formattingProvider = 'none',
+        --     },
+        --   },
+        --   on_attach = function(client, bufnr)
+        --     client.server_capabilities.semanticTokensProvider = vim.NIL
+        --   end,
+        -- },
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
         -- Some languages (like typescript) have entire language plugins that can be useful:
@@ -845,14 +854,15 @@ require('lazy').setup({
         'ormolu',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
-
       require('mason-lspconfig').setup {
         handlers = {
           function(server_name)
+            -- SKIP rust_analyzer so rustaceanvim can handle it exclusively
+            if server_name == 'rust_analyzer' then
+              return
+            end
+
             local server = servers[server_name] or {}
-            -- This handles overriding only values explicitly passed
-            -- by the server configuration above. Useful when disabling
-            -- certain features of an LSP (for example, turning off formatting for ts_ls)
             server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
             require('lspconfig')[server_name].setup(server)
           end,
@@ -895,7 +905,7 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        haskell = { 'ormolu' },
+        -- haskell = { 'ormolu' },
         go = { 'goimports', 'gofmt' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
@@ -1100,7 +1110,7 @@ require('lazy').setup({
     main = 'nvim-treesitter.config', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
     opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc', 'haskell' },
+      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
       -- Autoinstall languages that are not installed
       auto_install = true,
       highlight = {
